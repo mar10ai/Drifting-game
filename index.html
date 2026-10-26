@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CyberDrifter - Complex Drift Circuit</title>
+    <!-- Tailwind CSS for UI overlay styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for HUD icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&display=swap');
+
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0b0c10;
+            font-family: 'Rajdhani', sans-serif;
+            color: #fff;
+        }
+
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            background: #0b0c10;
+        }
+
+        /* Glassmorphism Styling */
+        .glass-panel {
+            background: rgba(15, 17, 26, 0.85);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(0, 243, 255, 0.25);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.7), inset 0 0 15px rgba(0, 243, 255, 0.05);
+        }
+
+        .neon-text-cyan {
+            color: #00f3ff;
+            text-shadow: 0 0 8px rgba(0, 243, 255, 0.6);
+        }
+
+        .neon-text-magenta {
+            color: #ff007f;
+            text-shadow: 0 0 8px rgba(255, 0, 127, 0.6);
+        }
+
+        .neon-text-gold {
+            color: #ffb703;
+            text-shadow: 0 0 8px rgba(255, 183, 3, 0.6);
+        }
+
+        /* Animated Drift Popup */
+        @keyframes floatUpFade {
+            0% { opacity: 0; transform: translateY(10px) scale(0.8); }
+            20% { opacity: 1; transform: translateY(0) scale(1.1); }
+            80% { opacity: 1; transform: translateY(-10px) scale(1.0); }
+            100% { opacity: 0; transform: translateY(-25px) scale(0.9); }
+        }
+
+        .combo-pop {
+            animation: floatUpFade 1.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        /* Mobile Touch Controls */
+        .touch-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(0, 243, 255, 0.3);
+            backdrop-filter: blur(4px);
+        }
+        .touch-btn:active, .touch-btn.active {
+            background: rgba(0, 243, 255, 0.35);
+            border-color: #00f3ff;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.5);
+        }
+    </style>
+</head>
+<body class="relative min-h-screen select-none overflow-hidden">
+
+    <!-- GAME CANVAS -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- TOP HUD OVERLAY -->
+    <div id="hud" class="absolute top-0 left-0 w-full p-4 md:p-6 pointer-events-none flex justify-between items-start z-10">
+        <!-- Left: Primary Score, Best Score & Multiplier -->
+        <div class="flex flex-col gap-2 pointer-events-auto">
+            <!-- Score & HighScore -->
+            <div class="glass-panel rounded-xl p-3 px-5 flex flex-col gap-1 w-48 md:w-64">
+                <div class="flex justify-between items-center text-xs text-gray-400 font-orbitron tracking-wider">
+                    <span>SCORE</span>
+                    <span class="text-gray-400">BEST: <span id="hudBestScore" class="text-yellow-400 font-bold">0</span></span>
+                </div>
+                <div id="scoreText" class="font-orbitron text-2xl md:text-3xl font-black neon-text-cyan tracking-wider">0</div>
+                
+                <!-- Secondary Score Display (Style / Smoke Score) -->
+                <div class="flex justify-between items-center text-[10px] text-gray-400 font-orbitron border-t border-gray-800 pt-1 mt-1">
+                    <span class="text-pink-400 font-bold"><i class="fa-solid fa-fire-flame-curved mr-1"></i>STYLE SCORE</span>
+                    <span id="styleScoreText" class="text-pink-300 font-bold">0 PTS</span>
+                </div>
+            </div>
+
+            <!-- Drift Multiplier Bar -->
+            <div class="glass-panel rounded-xl p-3 px-5 flex flex-col gap-1 w-48 md:w-64">
+                <div class="flex justify-between items-center text-xs font-orbitron tracking-wider">
+                    <span class="text-gray-400">DRIFT MULTIPLIER</span>
+                    <span id="multiplierText" class="font-black neon-text-magenta text-sm">x1.0</span>
+                </div>
+                <div class="w-full bg-gray-800 h-2 rounded-full overflow-hidden p-0.5 border border-gray-700">
+                    <div id="multiplierBar" class="bg-gradient-to-r from-cyan-400 to-pink-500 h-full rounded-full transition-all duration-75" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center: Dynamic Drift Points Popup Counter -->
+        <div id="comboContainer" class="flex flex-col items-center justify-center min-h-[80px]">
+            <div id="driftScoreDisplay" class="hidden text-center">
+                <div id="driftPointsText" class="font-orbitron text-3xl md:text-5xl font-extrabold neon-text-gold tracking-widest">+0</div>
+                <div id="driftAngleText" class="text-xs md:text-sm font-semibold tracking-widest text-cyan-300 uppercase mt-1">ANGLE: 0°</div>
+            </div>
+        </div>
+
+        <!-- Right: Speedometer & Respawn Button -->
+        <div class="flex flex-col items-end gap-2 pointer-events-auto">
+            <div class="glass-panel rounded-xl p-3 md:p-4 px-5 flex flex-col items-center justify-center min-w-[110px] md:min-w-[140px]">
+                <div class="text-xs text-gray-400 font-orbitron tracking-wider mb-1">SPEED</div>
+                <div class="flex items-baseline gap-1">
+                    <span id="speedText" class="font-orbitron text-2xl md:text-4xl font-black text-white tracking-tighter">0</span>
+                    <span class="text-xs font-bold text-cyan-400">KM/H</span>
+                </div>
+                <div class="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden mt-2 border border-gray-700">
+                    <div id="speedBar" class="bg-cyan-400 h-full rounded-full transition-all duration-75" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- QUICK RESPAWN BUTTON -->
+            <button onclick="respawnCar()" class="glass-panel px-4 py-2 rounded-xl text-xs font-orbitron font-bold text-yellow-400 border-yellow-500/40 hover:border-yellow-400 hover:bg-yellow-400/10 transition-all flex items-center gap-2 shadow-lg active:scale-95">
+                <i class="fa-solid fa-rotate-right text-sm"></i> RESPAWN (R)
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN MENU / GARAGE OVERLAY -->
+    <div id="menuModal" class="absolute inset-0 z-30 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+        <div class="glass-panel max-w-xl w-full rounded-2xl p-6 md:p-8 flex flex-col gap-6 border-cyan-500/30">
+            <!-- Header -->
+            <div class="text-center">
+                <h1 class="font-orbitron text-4xl md:text-6xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-pink-500 to-yellow-400 italic">
+                    CYBERDRIFTER
+                </h1>
+                <p class="text-gray-400 text-xs md:text-sm tracking-widest uppercase mt-1">Complex Circuit Car Drifter</p>
+            </div>
+
+            <!-- SCORE BOARD SUMMARY (Personal Best & Last Score) -->
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-gray-900/80 p-4 rounded-xl border border-yellow-500/30 flex flex-col items-center">
+                    <span class="text-[11px] font-orbitron text-yellow-400 tracking-wider"><i class="fa-solid fa-trophy mr-1"></i>PERSONAL BEST</span>
+                    <span id="menuBestScore" class="font-orbitron text-2xl md:text-3xl font-black text-white mt-1">0</span>
+                </div>
+                <div class="bg-gray-900/80 p-4 rounded-xl border border-cyan-500/30 flex flex-col items-center">
+                    <span class="text-[11px] font-orbitron text-cyan-400 tracking-wider"><i class="fa-solid fa-clock-rotate-left mr-1"></i>LAST SCORE</span>
+                    <span id="menuLastScore" class="font-orbitron text-2xl md:text-3xl font-black text-white mt-1">0</span>
+                </div>
+            </div>
+
+            <!-- Customization Tabs -->
+            <div class="space-y-4">
+                <h3 class="font-orbitron text-xs text-cyan-400 tracking-wider uppercase border-b border-gray-800 pb-1">Vehicle Customization</h3>
+                
+                <!-- Vehicle Color Selector -->
+                <div>
+                    <label class="text-xs text-gray-400 mb-2 block font-semibold">CAR COLOR</label>
+                    <div class="grid grid-cols-4 gap-3">
+                        <button onclick="setCarColor('#00f3ff')" class="h-9 rounded-lg bg-cyan-400 border-2 border-white/50 hover:scale-105 transition-transform flex items-center justify-center shadow-lg shadow-cyan-500/50"></button>
+                        <button onclick="setCarColor('#ff007f')" class="h-9 rounded-lg bg-pink-600 border-2 border-white/50 hover:scale-105 transition-transform flex items-center justify-center shadow-lg shadow-pink-500/50"></button>
+                        <button onclick="setCarColor('#ffb703')" class="h-9 rounded-lg bg-amber-400 border-2 border-white/50 hover:scale-105 transition-transform flex items-center justify-center shadow-lg shadow-amber-500/50"></button>
+                        <button onclick="setCarColor('#39ff14')" class="h-9 rounded-lg bg-green-400 border-2 border-white/50 hover:scale-105 transition-transform flex items-center justify-center shadow-lg shadow-green-500/50"></button>
+                    </div>
+                </div>
+
+                <!-- Drift Smoke Color Selector -->
+                <div>
+                    <label class="text-xs text-gray-400 mb-2 block font-semibold">DRIFT SMOKE</label>
+                    <div class="grid grid-cols-4 gap-3">
+                        <button onclick="setSmokeColor('#ffffff')" class="h-8 rounded-lg bg-white/80 border border-gray-600 hover:scale-105 transition-transform"></button>
+                        <button onclick="setSmokeColor('#00f3ff')" class="h-8 rounded-lg bg-cyan-400/80 border border-gray-600 hover:scale-105 transition-transform"></button>
+                        <button onclick="setSmokeColor('#ff007f')" class="h-8 rounded-lg bg-pink-500/80 border border-gray-600 hover:scale-105 transition-transform"></button>
+                        <button onclick="setSmokeColor('#a855f7')" class="h-8 rounded-lg bg-purple-500/80 border border-gray-600 hover:scale-105 transition-transform"></button>
+                    </div>
+                </div>
+
+                <!-- Controls Guide -->
+                <div class="bg-gray-900/70 p-4 rounded-xl border border-gray-800 text-xs text-gray-300 space-y-1.5">
+                    <div class="font-orbitron text-cyan-400 mb-1">CONTROLS & HELP</div>
+                    <div class="flex justify-between"><span>Accelerate / Reverse:</span> <span class="font-mono text-white">W / S or Up / Down</span></div>
+                    <div class="flex justify-between"><span>Steer Left / Right:</span> <span class="font-mono text-white">A / D or Left / Right</span></div>
+                    <div class="flex justify-between"><span>Handbrake (Drift):</span> <span class="font-mono text-white">SPACEBAR</span></div>
+                    <div class="flex justify-between"><span>Respawn / Reset Car:</span> <span class="font-mono text-yellow-400 font-bold">R</span></div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-4">
+                <button id="startBtn" onclick="startGame()" class="flex-1 py-3.5 rounded-xl font-orbitron font-black text-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black shadow-lg shadow-cyan-500/30 transition-all hover:scale-[1.02]">
+                    START DRIFTING <i class="fa-solid fa-play ml-2"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ON-SCREEN MOBILE CONTROLS -->
+    <div id="touchControls" class="absolute bottom-4 left-0 w-full px-6 flex justify-between items-end pointer-events-none z-20 md:hidden">
+        <!-- D-Pad Left / Right -->
+        <div class="flex gap-3 pointer-events-auto">
+            <button id="btnLeft" class="touch-btn w-16 h-16 rounded-2xl flex items-center justify-center text-2xl text-cyan-400 active:scale-95">
+                <i class="fa-solid fa-arrow-left"></i>
+            </button>
+            <button id="btnRight" class="touch-btn w-16 h-16 rounded-2xl flex items-center justify-center text-2xl text-cyan-400 active:scale-95">
+                <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        </div>
+
+        <!-- Handbrake / Gas / Reverse / Respawn -->
+        <div class="flex gap-3 pointer-events-auto items-end">
+            <button onclick="respawnCar()" class="touch-btn w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-orbitron font-bold text-yellow-400 active:scale-95">
+                <i class="fa-solid fa-rotate-right"></i>
+            </button>
+            <button id="btnBrake" class="touch-btn w-14 h-14 rounded-2xl flex items-center justify-center text-xs font-orbitron font-bold text-pink-500 active:scale-95">
+                HAND<br>BRAKE
+            </button>
+            <div class="flex flex-col gap-2">
+                <button id="btnAccelerate" class="touch-btn w-16 h-16 rounded-2xl flex items-center justify-center text-2xl text-green-400 active:scale-95">
+                    <i class="fa-solid fa-arrow-up"></i>
+                </button>
+                <button id="btnReverse" class="touch-btn w-16 h-14 rounded-2xl flex items-center justify-center text-xl text-yellow-400 active:scale-95">
+                    <i class="fa-solid fa-arrow-down"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AUDIO TOGGLE / PAUSE FLOATING BUTTON -->
+    <div class="absolute top-4 right-4 z-20 flex gap-2">
+        <button onclick="toggleAudio()" class="glass-panel p-3 rounded-xl text-cyan-400 hover:text-white transition-colors">
+            <i id="audioIcon" class="fa-solid fa-volume-high"></i>
+        </button>
+        <button onclick="openMenu()" class="glass-panel p-3 rounded-xl text-cyan-400 hover:text-white transition-colors">
+            <i class="fa-solid fa-gear"></i>
+        </button>
+    </div>
+
+    <script>
+        /* ==========================================================================
+           1. WEB AUDIO SYNTHESIZER ENGINE
+           ========================================================================== */
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.isMuted = false;
+                this.engineOsc = null;
+                this.engineGain = null;
+                this.squealNoise = null;
+                this.squealGain = null;
+                this.initialized = false;
+            }
+
+            init() {
+                if (this.initialized) return;
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                    
+                    // Engine Sound (Low Frequency Sawtooth Synth)
+                    this.engineOsc = this.ctx.createOscillator();
+                    this.engineGain = this.ctx.createGain();
+                    this.engineOsc.type = 'sawtooth';
+                    this.engineOsc.frequency.setValueAtTime(45, this.ctx.currentTime);
+                    
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(350, this.ctx.currentTime);
+                    
+                    this.engineGain.gain.setValueAtTime(0.04, this.ctx.currentTime);
+                    this.engineOsc.connect(filter);
+                    filter.connect(this.engineGain);
+                    this.engineGain.connect(this.ctx.destination);
+                    this.engineOsc.start();
+
+                    // Tire Squeal Noise Synth
+                    const bufferSize = this.ctx.sampleRate * 1;
+                    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                    const output = noiseBuffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        output[i] = Math.random() * 2 - 1;
+                    }
+
+                    const whiteNoise = this.ctx.createBufferSource();
+                    whiteNoise.buffer = noiseBuffer;
+                    whiteNoise.loop = true;
+
+                    const squealFilter = this.ctx.createBiquadFilter();
+                    squealFilter.type = 'bandpass';
+                    squealFilter.frequency.setValueAtTime(2200, this.ctx.currentTime);
+                    squealFilter.Q.setValueAtTime(3.0, this.ctx.currentTime);
+
+                    this.squealGain = this.ctx.createGain();
+                    this.squealGain.gain.setValueAtTime(0, this.ctx.currentTime);
+
+                    whiteNoise.connect(squealFilter);
+                    squealFilter.connect(this.squealGain);
+                    this.squealGain.connect(this.ctx.destination);
+                    whiteNoise.start();
+
+                    this.initialized = true;
+                } catch(e) {
+                    console.warn('AudioContext failed to initialize.', e);
+                }
+            }
+
+            updateEngine(speed, maxSpeed) {
+                if (!this.initialized || this.isMuted) return;
+                const speedRatio = Math.abs(speed) / maxSpeed;
+                const pitch = 45 + (speedRatio * 150);
+                this.engineOsc.frequency.setTargetAtTime(pitch, this.ctx.currentTime, 0.05);
+            }
+
+            setSqueal(volume) {
+                if (!this.initialized || this.isMuted) return;
+                const targetGain = Math.min(0.2, volume * 0.2);
+                this.squealGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.05);
+            }
+
+            playCrash() {
+                if (!this.initialized || this.isMuted) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+            }
+
+            playScorePop(multiplier) {
+                if (!this.initialized || this.isMuted) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                const baseFreq = 420 + Math.min(multiplier * 50, 500);
+                osc.frequency.setValueAtTime(baseFreq, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.4, this.ctx.currentTime + 0.12);
+                gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.12);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.12);
+            }
+        }
+
+        const audio = new SoundEngine();
+
+        function toggleAudio() {
+            audio.isMuted = !audio.isMuted;
+            document.getElementById('audioIcon').className = audio.isMuted ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-volume-high';
+            if (audio.engineGain) {
+                audio.engineGain.gain.setValueAtTime(audio.isMuted ? 0 : 0.04, audio.ctx.currentTime);
+            }
+        }
+
+        /* ==========================================================================
+           2. CANVAS & INPUT MANAGEMENT
+           ========================================================================== */
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        });
+
+        const keys = {
+            up: false,
+            down: false,
+            left: false,
+            right: false,
+            handbrake: false
+        };
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyW' || e.code === 'ArrowUp') keys.up = true;
+            if (e.code === 'KeyS' || e.code === 'ArrowDown') keys.down = true;
+            if (e.code === 'KeyA' || e.code === 'ArrowLeft') keys.left = true;
+            if (e.code === 'KeyD' || e.code === 'ArrowRight') keys.right = true;
+            if (e.code === 'Space') { keys.handbrake = true; e.preventDefault(); }
+            if (e.code === 'KeyR') respawnCar();
+            if (e.code === 'KeyM') toggleAudio();
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'KeyW' || e.code === 'ArrowUp') keys.up = false;
+            if (e.code === 'KeyS' || e.code === 'ArrowDown') keys.down = false;
+            if (e.code === 'KeyA' || e.code === 'ArrowLeft') keys.left = false;
+            if (e.code === 'KeyD' || e.code === 'ArrowRight') keys.right = false;
+            if (e.code === 'Space') keys.handbrake = false;
+        });
+
+        function bindTouch(id, keyName) {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            const start = (e) => { e.preventDefault(); keys[keyName] = true; btn.classList.add('active'); audio.init(); };
+            const end = (e) => { e.preventDefault(); keys[keyName] = false; btn.classList.remove('active'); };
+            btn.addEventListener('touchstart', start);
+            btn.addEventListener('touchend', end);
+            btn.addEventListener('mousedown', start);
+            btn.addEventListener('mouseup', end);
+        }
+
+        bindTouch('btnAccelerate', 'up');
+        bindTouch('btnReverse', 'down');
+        bindTouch('btnLeft', 'left');
+        bindTouch('btnRight', 'right');
+        bindTouch('btnBrake', 'handbrake');
+
+        /* ==========================================================================
+           3. SKID TRAIL & PARTICLE ENGINE
+           ========================================================================== */
+        class SkidTrail {
+            constructor() {
+                this.points = [];
+                this.maxPoints = 400;
+            }
+
+            addPoint(x1, y1, x2, y2, alpha) {
+                this.points.push({ x1, y1, x2, y2, alpha });
+                if (this.points.length > this.maxPoints) {
+                    this.points.shift();
+                }
+            }
+
+            draw(ctx, camera) {
+                ctx.save();
+                for (let i = 0; i < this.points.length; i++) {
+                    const pt = this.points[i];
+                    ctx.strokeStyle = `rgba(10, 10, 15, ${pt.alpha * 0.75})`;
+                    ctx.lineWidth = 5;
+                    ctx.beginPath();
+                    ctx.moveTo(pt.x1 - camera.x + width/2, pt.y1 - camera.y + height/2);
+                    ctx.lineTo(pt.x2 - camera.x + width/2, pt.y2 - camera.y + height/2);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+        }
+
+        class ParticleSystem {
+            constructor() {
+                this.particles = [];
+            }
+
+            emitSmoke(x, y, color) {
+                this.particles.push({
+                    x: x + (Math.random() - 0.5) * 6,
+                    y: y + (Math.random() - 0.5) * 6,
+                    vx: (Math.random() - 0.5) * 0.8,
+                    vy: (Math.random() - 0.5) * 0.8,
+                    size: Math.random() * 8 + 4,
+                    growth: 0.4,
+                    alpha: 0.5,
+                    decay: 0.02,
+                    color: color || '#ffffff'
+                });
+            }
+
+            emitSparks(x, y) {
+                for (let i = 0; i < 8; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = Math.random() * 5 + 2;
+                    this.particles.push({
+                        x: x,
+                        y: y,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed,
+                        size: Math.random() * 3 + 1,
+                        growth: -0.05,
+                        alpha: 1.0,
+                        decay: 0.05,
+                        color: '#ffb703'
+                    });
+                }
+            }
+
+            update() {
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const p = this.particles[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.size += p.growth;
+                    p.alpha -= p.decay;
+                    if (p.alpha <= 0 || p.size <= 0) {
+                        this.particles.splice(i, 1);
+                    }
+                }
+            }
+
+            draw(ctx, camera) {
+                ctx.save();
+                for (let p of this.particles) {
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = Math.max(0, p.alpha);
+                    ctx.beginPath();
+                    ctx.arc(p.x - camera.x + width/2, p.y - camera.y + height/2, Math.max(0.1, p.size), 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+        }
+
+        /* ==========================================================================
+           4. COMPLEX CIRCUIT TRACK ARCHITECTURE & PATH FINDER
+           ========================================================================== */
+        class ComplexTrack {
+            constructor() {
+                // Control Points defining a complex circuit (S-curves, Hairpins, Sweepers)
+                this.path = [
+                    { x: 1000, y: 1000 },
+                    { x: 2500, y: 1000 },
+                    { x: 3500, y: 1600 },
+                    { x: 3800, y: 2800 },
+                    { x: 3000, y: 3600 },
+                    { x: 2000, y: 3200 },
+                    { x: 1500, y: 3800 },
+                    { x: 600,  y: 3500 },
+                    { x: 400,  y: 2400 },
+                    { x: 1200, y: 2000 },
+                    { x: 600,  y: 1500 }
+                ];
+
+                this.trackWidth = 320; // Wide asphalt lanes for drifting
+                this.sampledPoints = this.generateSmoothPath(12);
+            }
+
+            // Interpolate Control Points into Dense Segment Arrays
+            generateSmoothPath(subdivisions) {
+                const points = [];
+                const len = this.path.length;
+                for (let i = 0; i < len; i++) {
+                    const p0 = this.path[(i - 1 + len) % len];
+                    const p1 = this.path[i];
+                    const p2 = this.path[(i + 1) % len];
+                    const p3 = this.path[(i + 2) % len];
+
+                    for (let t = 0; t < 1; t += 1 / subdivisions) {
+                        // Catmull-Rom Spline Interpolation
+                        const tt = t * t;
+                        const ttt = tt * t;
+                        const x = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * tt + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * ttt);
+                        const y = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * tt + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * ttt);
+                        points.push({ x, y });
+                    }
+                }
+                return points;
+            }
+
+            // Find Closest Point on Track Centerline to Car
+            getClosestPoint(x, y) {
+                let minDistSq = Infinity;
+                let closest = this.sampledPoints[0];
+                let closestIndex = 0;
+
+                for (let i = 0; i < this.sampledPoints.length; i++) {
+                    const pt = this.sampledPoints[i];
+                    const dSq = (pt.x - x) ** 2 + (pt.y - y) ** 2;
+                    if (dSq < minDistSq) {
+                        minDistSq = dSq;
+                        closest = pt;
+                        closestIndex = i;
+                    }
+                }
+
+                // Calculate Tangent Angle at Closest Point for Respawn Direction
+                const nextPt = this.sampledPoints[(closestIndex + 1) % this.sampledPoints.length];
+                const tangentAngle = Math.atan2(nextPt.y - closest.y, nextPt.x - closest.x) + Math.PI / 2;
+
+                return { point: closest, distance: Math.sqrt(minDistSq), angle: tangentAngle };
+            }
+
+            draw(ctx, camera) {
+                ctx.save();
+                
+                // 1. Draw Wide Asphalt Track Base
+                ctx.strokeStyle = '#181b28';
+                ctx.lineWidth = this.trackWidth;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.beginPath();
+                for (let i = 0; i < this.sampledPoints.length; i++) {
+                    const pt = this.sampledPoints[i];
+                    const sx = pt.x - camera.x + width / 2;
+                    const sy = pt.y - camera.y + height / 2;
+                    if (i === 0) ctx.moveTo(sx, sy);
+                    else ctx.lineTo(sx, sy);
+                }
+                ctx.closePath();
+                ctx.stroke();
+
+                // 2. Draw Outer Neon Blue Barrier Border
+                ctx.strokeStyle = '#00f3ff';
+                ctx.shadowColor = '#00f3ff';
+                ctx.shadowBlur = 12;
+                ctx.lineWidth = this.trackWidth + 12;
+                ctx.globalCompositeOperation = 'destination-over';
+                ctx.beginPath();
+                for (let i = 0; i < this.sampledPoints.length; i++) {
+                    const pt = this.sampledPoints[i];
+                    const sx = pt.x - camera.x + width / 2;
+                    const sy = pt.y - camera.y + height / 2;
+                    if (i === 0) ctx.moveTo(sx, sy);
+                    else ctx.lineTo(sx, sy);
+                }
+                ctx.closePath();
+                ctx.stroke();
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.shadowBlur = 0;
+
+                // 3. Center Racing Line Dashed Marker
+                ctx.strokeStyle = 'rgba(255, 0, 127, 0.4)';
+                ctx.lineWidth = 4;
+                ctx.setLineDash([30, 30]);
+                ctx.beginPath();
+                for (let i = 0; i < this.sampledPoints.length; i++) {
+                    const pt = this.sampledPoints[i];
+                    const sx = pt.x - camera.x + width / 2;
+                    const sy = pt.y - camera.y + height / 2;
+                    if (i === 0) ctx.moveTo(sx, sy);
+                    else ctx.lineTo(sx, sy);
+                }
+                ctx.closePath();
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                ctx.restore();
+            }
+        }
+
+        /* ==========================================================================
+           5. CAR DYNAMICS & UN-STICKING PHYSICS ENGINE
+           ========================================================================== */
+        class Car {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.angle = 0;
+                this.speed = 0;
+                this.vx = 0;
+                this.vy = 0;
+
+                this.color = '#00f3ff';
+                this.smokeColor = '#ffffff';
+
+                this.maxSpeed = 16;
+                this.acceleration = 0.22;
+                this.reverseSpeed = -6;
+                this.friction = 0.975;
+                this.turnSpeed = 0.048;
+                this.driftGrip = 0.88;
+                this.handbrakeGrip = 0.96;
+
+                this.width = 24;
+                this.height = 44;
+
+                this.isDrifting = false;
+                this.driftAngle = 0;
+                this.slipSpeed = 0;
+            }
+
+            update(track, particles) {
+                // Acceleration Controls
+                if (keys.up) {
+                    this.speed = Math.min(this.speed + this.acceleration, this.maxSpeed);
+                } else if (keys.down) {
+                    this.speed = Math.max(this.speed - this.acceleration, this.reverseSpeed);
+                } else {
+                    this.speed *= this.friction;
+                }
+
+                // Steering Controls
+                if (Math.abs(this.speed) > 0.2) {
+                    const dir = this.speed > 0 ? 1 : -1;
+                    if (keys.left) this.angle -= this.turnSpeed * dir * (Math.abs(this.speed) / this.maxSpeed + 0.5);
+                    if (keys.right) this.angle += this.turnSpeed * dir * (Math.abs(this.speed) / this.maxSpeed + 0.5);
+                }
+
+                // Dynamic Grip Inertia
+                const forwardX = Math.sin(this.angle);
+                const forwardY = -Math.cos(this.angle);
+                const targetVx = forwardX * this.speed;
+                const targetVy = forwardY * this.speed;
+
+                const grip = keys.handbrake ? this.handbrakeGrip : this.driftGrip;
+                this.vx = this.vx * grip + targetVx * (1 - grip);
+                this.vy = this.vy * grip + targetVy * (1 - grip);
+
+                // Proposed Position Step
+                const nextX = this.x + this.vx;
+                const nextY = this.y + this.vy;
+
+                // Collision Detection with Track Boundary
+                const closestInfo = track.getClosestPoint(nextX, nextY);
+                const maxAllowedDistance = (track.trackWidth / 2) - 16;
+
+                if (closestInfo.distance > maxAllowedDistance) {
+                    // Soft Barrier Bounce (Calculates normal vector pointing back inside track)
+                    const normalX = (closestInfo.point.x - nextX) / closestInfo.distance;
+                    const normalY = (closestInfo.point.y - nextY) / closestInfo.distance;
+
+                    // Push car back inside boundary smoothly
+                    this.x = closestInfo.point.x - normalX * maxAllowedDistance;
+                    this.y = closestInfo.point.y - normalY * maxAllowedDistance;
+
+                    // Elastic Barrier Physics: Reflect Velocity Softly
+                    const dot = this.vx * normalX + this.vy * normalY;
+                    this.vx = (this.vx - 1.4 * dot * normalX) * 0.5;
+                    this.vy = (this.vy - 1.4 * dot * normalY) * 0.5;
+                    this.speed = -this.speed * 0.3;
+
+                    audio.playCrash();
+                    particles.emitSparks(this.x, this.y);
+                } else {
+                    // Valid Move
+                    this.x = nextX;
+                    this.y = nextY;
+                }
+
+                // Slip & Drift Calculation
+                const currentSpeed = Math.hypot(this.vx, this.vy);
+                const movementAngle = Math.atan2(this.vy, this.vx);
+                let angleDiff = Math.abs(this.angle - (movementAngle + Math.PI / 2));
+                angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
+
+                this.slipSpeed = Math.abs(Math.sin(angleDiff)) * currentSpeed;
+                this.isDrifting = (currentSpeed > 3.8 && this.slipSpeed > 2.0) || (keys.handbrake && currentSpeed > 2.5);
+                this.driftAngle = Math.round(angleDiff * (180 / Math.PI));
+
+                // Audio Update
+                audio.updateEngine(currentSpeed, this.maxSpeed);
+                audio.setSqueal(this.isDrifting ? Math.min(1.0, this.slipSpeed / 7) : 0);
+            }
+
+            draw(ctx, camera) {
+                const screenX = this.x - camera.x + width / 2;
+                const screenY = this.y - camera.y + height / 2;
+
+                ctx.save();
+                ctx.translate(screenX, screenY);
+                ctx.rotate(this.angle);
+
+                // Car Shadow
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.fillRect(-this.width / 2 + 4, -this.height / 2 + 4, this.width, this.height);
+
+                // Tires
+                ctx.fillStyle = '#111';
+                ctx.fillRect(-this.width / 2 - 2, -this.height / 2 + 6, 4, 10);
+                ctx.fillRect(this.width / 2 - 2, -this.height / 2 + 6, 4, 10);
+                ctx.fillRect(-this.width / 2 - 2, this.height / 2 - 16, 4, 10);
+                ctx.fillRect(this.width / 2 - 2, this.height / 2 - 16, 4, 10);
+
+                // Car Chassis Body
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.roundRect(-this.width / 2, -this.height / 2, this.width, this.height, 6);
+                ctx.fill();
+
+                // Glass / Cabin Roof
+                ctx.fillStyle = '#0f111a';
+                ctx.beginPath();
+                ctx.roundRect(-this.width / 2 + 3, -this.height / 2 + 10, this.width - 6, this.height - 20, 4);
+                ctx.fill();
+
+                // Headlight Beam Cone
+                const headLightGlow = ctx.createRadialGradient(0, -this.height/2, 2, 0, -this.height/2 - 40, 50);
+                headLightGlow.addColorStop(0, 'rgba(0, 243, 255, 0.8)');
+                headLightGlow.addColorStop(1, 'rgba(0, 243, 255, 0)');
+                ctx.fillStyle = headLightGlow;
+                ctx.beginPath();
+                ctx.moveTo(-10, -this.height/2);
+                ctx.lineTo(-35, -this.height/2 - 55);
+                ctx.lineTo(35, -this.height/2 - 55);
+                ctx.lineTo(10, -this.height/2);
+                ctx.fill();
+
+                // Tail / Brake Lights
+                ctx.fillStyle = keys.down || keys.handbrake ? '#ff0055' : '#aa0033';
+                ctx.fillRect(-this.width / 2 + 3, this.height / 2 - 3, 6, 3);
+                ctx.fillRect(this.width / 2 - 9, this.height / 2 - 3, 6, 3);
+
+                ctx.restore();
+            }
+
+            getRearWheelPos() {
+                const cos = Math.cos(this.angle);
+                const sin = Math.sin(this.angle);
+                const rearOffsetY = this.height / 2 - 10;
+                const offsetX = this.width / 2 - 2;
+
+                return {
+                    left: {
+                        x: this.x - cos * offsetX + sin * rearOffsetY,
+                        y: this.y - sin * offsetX - cos * rearOffsetY
+                    },
+                    right: {
+                        x: this.x + cos * offsetX + sin * rearOffsetY,
+                        y: this.y + sin * offsetX - cos * rearOffsetY
+                    }
+                };
+            }
+        }
+
+        /* ==========================================================================
+           6. GAME ENGINE STATE & SCORE CONTROLLER
+           ========================================================================== */
+        let track = new ComplexTrack();
+        let car = new Car(track.sampledPoints[0].x, track.sampledPoints[0].y);
+        let skidTrail = new SkidTrail();
+        let particles = new ParticleSystem();
+
+        let camera = { x: car.x, y: car.y };
+        let score = 0;
+        let styleScore = 0; // Secondary Scoring (Insignificant / Style points)
+        let highScore = parseInt(localStorage.getItem('cyberdrifter_highscore')) || 0;
+        let lastScore = parseInt(localStorage.getItem('cyberdrifter_lastscore')) || 0;
+        let currentDriftPoints = 0;
+        let multiplier = 1.0;
+        let isGameRunning = false;
+
+        function updateScoreUI() {
+            document.getElementById('hudBestScore').innerText = highScore.toLocaleString();
+            document.getElementById('menuBestScore').innerText = highScore.toLocaleString();
+            document.getElementById('menuLastScore').innerText = lastScore.toLocaleString();
+            document.getElementById('styleScoreText').innerText = `${Math.round(styleScore).toLocaleString()} PTS`;
+        }
+        updateScoreUI();
+
+        function setCarColor(color) { car.color = color; }
+        function setSmokeColor(color) { car.smokeColor = color; }
+
+        function startGame() {
+            audio.init();
+            document.getElementById('menuModal').classList.add('hidden');
+            isGameRunning = true;
+        }
+
+        function openMenu() {
+            // Save current run score as Last Score when opening menu
+            if (score > 0) {
+                lastScore = score;
+                localStorage.setItem('cyberdrifter_lastscore', lastScore);
+            }
+            updateScoreUI();
+            document.getElementById('menuModal').classList.remove('hidden');
+            isGameRunning = false;
+        }
+
+        /* Respawn System: Instantly teleports car to nearest track centerline point */
+        function respawnCar() {
+            const closest = track.getClosestPoint(car.x, car.y);
+            car.x = closest.point.x;
+            car.y = closest.point.y;
+            car.angle = closest.angle;
+            car.speed = 0;
+            car.vx = 0;
+            car.vy = 0;
+            failDriftCombo();
+        }
+
+        function bankDriftCombo() {
+            if (currentDriftPoints > 50) {
+                const totalGained = Math.round(currentDriftPoints * multiplier);
+                score += totalGained;
+
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem('cyberdrifter_highscore', highScore);
+                }
+
+                lastScore = score;
+                localStorage.setItem('cyberdrifter_lastscore', lastScore);
+                updateScoreUI();
+
+                audio.playScorePop(multiplier);
+
+                const pop = document.createElement('div');
+                pop.className = 'combo-pop font-orbitron font-black text-xl md:text-2xl neon-text-gold absolute';
+                pop.innerText = `+${totalGained.toLocaleString()} (x${multiplier.toFixed(1)})`;
+                document.getElementById('comboContainer').appendChild(pop);
+                setTimeout(() => pop.remove(), 1200);
+            }
+
+            currentDriftPoints = 0;
+            multiplier = 1.0;
+            document.getElementById('driftScoreDisplay').classList.add('hidden');
+        }
+
+        function failDriftCombo() {
+            currentDriftPoints = 0;
+            multiplier = 1.0;
+            document.getElementById('driftScoreDisplay').classList.add('hidden');
+            document.getElementById('multiplierBar').style.width = '0%';
+            document.getElementById('multiplierText').innerText = 'x1.0';
+        }
+
+        /* 60 FPS Animation Frame Loop */
+        let prevWheelPos = null;
+
+        function gameLoop() {
+            requestAnimationFrame(gameLoop);
+
+            if (isGameRunning) {
+                // Physics & Camera Step
+                car.update(track, particles);
+
+                camera.x += (car.x - camera.x) * 0.1;
+                camera.y += (car.y - camera.y) * 0.1;
+
+                // Drift Particles & Score Update
+                const wheels = car.getRearWheelPos();
+                if (car.isDrifting) {
+                    if (prevWheelPos) {
+                        skidTrail.addPoint(prevWheelPos.left.x, prevWheelPos.left.y, wheels.left.x, wheels.left.y, 0.85);
+                        skidTrail.addPoint(prevWheelPos.right.x, prevWheelPos.right.y, wheels.right.x, wheels.right.y, 0.85);
+                    }
+                    particles.emitSmoke(wheels.left.x, wheels.left.y, car.smokeColor);
+                    particles.emitSmoke(wheels.right.x, wheels.right.y, car.smokeColor);
+
+                    const speed = Math.hypot(car.vx, car.vy);
+                    
+                    // Primary Points Gain
+                    const pointGain = (car.driftAngle * 0.15) * (speed * 0.22);
+                    currentDriftPoints += pointGain;
+
+                    // Secondary Style Points Gain (accumulates steadily at small rate for smoke / tire burn)
+                    styleScore += pointGain * 0.08;
+                    document.getElementById('styleScoreText').innerText = `${Math.round(styleScore).toLocaleString()} PTS`;
+
+                    multiplier = Math.min(10.0, multiplier + 0.005);
+
+                    document.getElementById('driftScoreDisplay').classList.remove('hidden');
+                    document.getElementById('driftPointsText').innerText = `+${Math.round(currentDriftPoints * multiplier).toLocaleString()}`;
+                    document.getElementById('driftAngleText').innerText = `ANGLE: ${car.driftAngle}°`;
+                    document.getElementById('multiplierText').innerText = `x${multiplier.toFixed(1)}`;
+                    document.getElementById('multiplierBar').style.width = `${Math.min(100, (multiplier / 10.0) * 100)}%`;
+                } else {
+                    if (currentDriftPoints > 0) {
+                        bankDriftCombo();
+                    }
+                }
+                prevWheelPos = wheels;
+
+                particles.update();
+
+                // Update HUD
+                const displaySpeed = Math.round(Math.hypot(car.vx, car.vy) * 12);
+                document.getElementById('speedText').innerText = displaySpeed;
+                document.getElementById('scoreText').innerText = score.toLocaleString();
+                document.getElementById('speedBar').style.width = `${Math.min(100, (displaySpeed / 200) * 100)}%`;
+            }
+
+            // Render World
+            ctx.fillStyle = '#0b0c10';
+            ctx.fillRect(0, 0, width, height);
+
+            track.draw(ctx, camera);
+            skidTrail.draw(ctx, camera);
+            particles.draw(ctx, camera);
+            car.draw(ctx, camera);
+        }
+
+        window.onload = () => {
+            gameLoop();
+        };
+    </script>
+</body>
+</html>
